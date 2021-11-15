@@ -19,7 +19,7 @@
 # resolver: https://example.com/snapshots/2018-01-01.yaml
 # resolver:
 #   url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/16.yaml
-resolver: ghc-9.2.1
+resolver: ghc-9.0.1
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -42,6 +42,12 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 # extra-deps: []
+extra-deps:
+- MonadRandom-0.5.3@sha256:1972a7302aaa409f0b0cd5ff8f5afda03a5156ceb518c2264b2cf0e362123eb6,1454
+- primitive-0.7.2.0@sha256:d7c3635e83ae160129cdfe2be4092ab6389199d73a2c29adf904124dbcfe6100,2660
+- random-1.2.1@sha256:8bee24dc0c985a90ee78d94c61f8aed21c49633686f0f1c14c5078d818ee43a2,6598
+- transformers-compat-0.7@sha256:c4cc2d01c4e490ba680e9a0b607a1a790137856a6b3af12f8bdc7788a567bcf5,5572
+- splitmix-0.1.0.3@sha256:fc3aae74c467f4b608050bef53aec17904a618731df9407e655d8f3bf8c32d5c,6049
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
