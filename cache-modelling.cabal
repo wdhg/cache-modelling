@@ -32,10 +32,10 @@ library
   hs-source-dirs:
       src
   build-depends:
-      MonadRandom ==0.5.*
-    , array ==0.5.*
+      array ==0.5.*
     , base >=4.7 && <5
     , mtl >=2.2 && <3
+    , random ==1.2.*
   default-language: Haskell2010
 
 executable cache-modelling-exe
@@ -46,11 +46,11 @@ executable cache-modelling-exe
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      MonadRandom ==0.5.*
-    , array ==0.5.*
+      array ==0.5.*
     , base >=4.7 && <5
     , cache-modelling
     , mtl >=2.2 && <3
+    , random ==1.2.*
   default-language: Haskell2010
 
 test-suite cache-modelling-test
@@ -62,9 +62,9 @@ test-suite cache-modelling-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      MonadRandom ==0.5.*
-    , array ==0.5.*
+      array ==0.5.*
     , base >=4.7 && <5
     , cache-modelling
     , mtl >=2.2 && <3
+    , random ==1.2.*
   default-language: Haskell2010

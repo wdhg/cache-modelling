@@ -1,20 +1,21 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Simulation where
 
-import Control.Monad.Random
+import Control.Monad.Reader
 import Control.Monad.ST
 import Data.Array
 import Data.Array.ST
 import Data.STRef
+import PQueue
+import System.Random
 
--- TODO consider using a maclauran series expansion to approximate log
--- F(X <= x) = 1 - e^(-rate * x)
-interarrivalTime :: (Floating a, Random a) => a -> Rand StdGen a
-interarrivalTime rate = do
-  u <- getRandomR (0, 1)
-  return $ (1 / rate) * log (1 / (1 - u))
+-- time and process ID
+data Job = Job Float Int deriving (Eq, Ord)
 
 data FIFOCache :: * -> * where
   FIFOCache ::
@@ -22,6 +23,53 @@ data FIFOCache :: * -> * where
       getIndex :: STRef s Int
     } ->
     FIFOCache s
+
+newFIFO :: Int -> ST s (FIFOCache s)
+newFIFO size = do
+  initArray <- newArray (0, size - 1) (-1) :: ST s (STArray s Int Int)
+  initNextIndex <- newSTRef 0
+  return $ FIFOCache initArray initNextIndex
+
+data Simulation :: * -> * where
+  Simulation ::
+    { cache :: FIFOCache s,
+      getHits :: STRef s Int,
+      getMisses :: STRef s Int,
+      getArrivals :: STRef s (PQueue Job),
+      getTimeLeft :: STRef s Float,
+      getGen :: STRef s StdGen
+    } ->
+    Simulation s
+
+data Stats = Stats
+  { hits :: Int,
+    misses :: Int,
+    duration :: Float
+  }
+  deriving (Show)
+
+newSimulation :: Int -> Float -> FIFOCache s -> ST s (Simulation s)
+newSimulation seed duration cache = do
+  initHits <- newSTRef 0
+  initMisses <- newSTRef 0
+  initArrivals <- newSTRef Nil
+  initTime <- newSTRef duration
+  initGen <- newSTRef (mkStdGen seed)
+  return $ Simulation cache initHits initMisses initArrivals initTime initGen
+
+ended :: Simulation s -> ST s Bool
+ended state = do
+  time <- readSTRef $ getTimeLeft state
+  return $ time <= 0
+
+-- TODO consider using a maclauran series expansion to approximate log
+-- F(X <= x) = 1 - e^(-rate * x)
+interarrivalTime :: (Floating a, Random a) => a -> Simulation s -> ST s a
+interarrivalTime rate state = do
+  gen <- readSTRef $ getGen state
+  let (u, gen') = randomR (0, 1) gen
+  writeSTRef (getGen state) gen'
+  return ((1 / rate) * log (1 / (1 - u)))
 
 cachedIn :: Int -> FIFOCache s -> ST s Bool
 cachedIn x cache = do
@@ -51,25 +99,29 @@ stash x cache = do
     then return ()
     else stash' x cache
 
-newFIFO :: Int -> ST s (FIFOCache s)
-newFIFO size = do
-  initArray <- newArray (0, size - 1) (-1) :: ST s (STArray s Int Int)
-  initNextIndex <- newSTRef 0
-  return $ FIFOCache initArray initNextIndex
+simulateFIFO' :: Simulation s -> ST s ()
+simulateFIFO' state = do
+  stash 1 $ cache state
+  interval <- interarrivalTime 1 state
+  timeLeft <- readSTRef $ getTimeLeft state
+  writeSTRef (getTimeLeft state) (timeLeft - interval)
+  hasEnded <- ended state
+  if hasEnded
+    then return ()
+    else simulateFIFO' state
 
-simulateFIFO' :: Int -> FIFOCache s -> ST s ()
-simulateFIFO' 0 cache = pure ()
-simulateFIFO' x cache = do
-  stash x cache
-  simulateFIFO' (x - 1) cache
+outputStats :: Float -> Simulation s -> ST s Stats
+outputStats duration state = do
+  hits <- readSTRef $ getHits state
+  misses <- readSTRef $ getMisses state
+  return $ Stats hits misses duration
 
-simulateFIFO :: Int -> IO ()
-simulateFIFO size = print $
-  elems $
-    runSTArray $ do
-      cache <- newFIFO size
-      simulateFIFO' 10 cache
-      return $ getArray cache
+simulateFIFO :: Int -> Int -> Float -> ST s Stats
+simulateFIFO seed size duration = do
+  cache <- newFIFO size
+  state <- newSimulation seed duration cache
+  simulateFIFO' state
+  outputStats duration state
 
 simulate :: IO ()
-simulate = simulateFIFO 10
+simulate = print $ runST $ simulateFIFO 0 10 100
