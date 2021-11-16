@@ -1,59 +1,56 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Simulation where
 
-import Control.Monad.Random
-import Control.Monad.State
+import Control.Monad.ST
+import Data.Array.ST
+import Data.STRef
 
-newtype Request = Request Int deriving (Eq, Show)
-
-class (Eq a) => Cache c a where
-  cachedIn :: a -> c a -> Bool
-  isFull :: c a -> Bool
-  stash :: a -> c a -> c a
-
-data FIFOCache a = FIFOCache
-  { size :: Int,
-    contents :: [a]
-  }
-  deriving (Show)
-
-instance Eq a => Cache FIFOCache a where
-  x `cachedIn` cache = x `elem` contents cache
-
-  isFull cache = size cache == length (contents cache)
-
-  stash x cache
-    | isFull cache = cache {contents = x : contents cache}
-    | x `cachedIn` cache = cache
-    | otherwise =
-      cache {contents = x : init (contents cache)}
-
-data Simulation :: * -> * where
-  Simulation ::
-    Cache c a =>
-    { cache :: c a,
-      hits :: Int,
-      misses :: Int
+data FIFOCache :: * -> * where
+  FIFOCache ::
+    { array :: STArray s Int Int,
+      nextIndex :: STRef s Int
     } ->
-    Simulation (c a)
+    FIFOCache s
 
-hit :: Cache c a => State (Simulation (c a)) ()
-hit = state $ \s -> ((), s {hits = hits s + 1})
+cachedIn :: Int -> FIFOCache s -> ST s Bool
+cachedIn x cache = do
+  xs <- getElems $ array cache
+  return (x `elem` xs)
 
-miss :: Cache c a => State (Simulation (c a)) ()
-miss = state $ \s -> ((), s {misses = misses s + 1})
+getNextIndex :: FIFOCache s -> ST s Int
+getNextIndex cache = do
+  index <- readSTRef $ nextIndex cache
+  (lowerBound, upperBound) <- getBounds $ array cache
+  if index < upperBound
+    then writeSTRef (nextIndex cache) (succ index)
+    else writeSTRef (nextIndex cache) lowerBound
+  return index
 
-simulate' :: Cache c Request => RandT StdGen (State (Simulation (c Request))) Float
-simulate' = do
-  p <- getRandomR (0, 1) -- get random value between 0 and 1
-  lift hit
-  lift miss
-  return p
+-- x is not in cache
+stash' :: Int -> FIFOCache s -> ST s ()
+stash' x cache = do
+  index <- getNextIndex cache
+  writeArray (array cache) index x
+  return ()
+
+stash :: Int -> FIFOCache s -> ST s ()
+stash x cache = do
+  alreadyCached <- x `cachedIn` cache
+  if alreadyCached
+    then return ()
+    else stash' x cache
+
+simulateFIFO :: Int -> IO ()
+simulateFIFO size = print $
+  runST $ do
+    initArray <- newArray (0, size - 1) (-1) :: ST s (STArray s Int Int)
+    initNextIndex <- newSTRef 0
+    let cache = FIFOCache initArray initNextIndex
+    stash 0 cache
+    stash 1 cache
+    return ()
 
 simulate :: IO ()
 simulate = undefined
