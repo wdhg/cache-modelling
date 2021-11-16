@@ -11,7 +11,7 @@ import Data.STRef
 data FIFOCache :: * -> * where
   FIFOCache ::
     { getArray :: STArray s Int Int,
-      nextIndex :: STRef s Int
+      getIndex :: STRef s Int
     } ->
     FIFOCache s
 
@@ -22,11 +22,11 @@ cachedIn x cache = do
 
 getNextIndex :: FIFOCache s -> ST s Int
 getNextIndex cache = do
-  index <- readSTRef $ nextIndex cache
+  index <- readSTRef $ getIndex cache
   (lowerBound, upperBound) <- getBounds $ getArray cache
   if index < upperBound
-    then writeSTRef (nextIndex cache) (succ index)
-    else writeSTRef (nextIndex cache) lowerBound
+    then writeSTRef (getIndex cache) (succ index)
+    else writeSTRef (getIndex cache) lowerBound
   return index
 
 -- x is not in cache
