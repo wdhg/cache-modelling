@@ -10,6 +10,7 @@ import Data.Array.ST
 import Data.STRef
 
 -- TODO consider using a maclauran series expansion to approximate log
+-- F(X <= x) = 1 - e^(-rate * x)
 interarrivalTime :: (Floating a, Random a) => a -> Rand StdGen a
 interarrivalTime rate = do
   u <- getRandomR (0, 1)
