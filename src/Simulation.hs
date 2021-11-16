@@ -41,13 +41,6 @@ data Simulation :: * -> * where
     } ->
     Simulation s
 
-data Stats = Stats
-  { hits :: Int,
-    misses :: Int,
-    duration :: Float
-  }
-  deriving (Show)
-
 newSimulation :: Int -> Float -> FIFOCache s -> ST s (Simulation s)
 newSimulation seed duration cache = do
   initHits <- newSTRef 0
@@ -56,6 +49,19 @@ newSimulation seed duration cache = do
   initTime <- newSTRef duration
   initGen <- newSTRef (mkStdGen seed)
   return $ Simulation cache initHits initMisses initArrivals initTime initGen
+
+data Stats = Stats
+  { hits :: Int,
+    misses :: Int,
+    duration :: Float
+  }
+  deriving (Show)
+
+outputStats :: Float -> Simulation s -> ST s Stats
+outputStats duration state = do
+  hits <- readSTRef $ getHits state
+  misses <- readSTRef $ getMisses state
+  return $ Stats hits misses duration
 
 ended :: Simulation s -> ST s Bool
 ended state = do
@@ -99,6 +105,9 @@ stash x cache = do
     then return ()
     else stash' x cache
 
+calcRate :: Int -> Float
+calcRate processID = 1 / (1 + fromIntegral processID)
+
 simulateFIFO' :: Simulation s -> ST s ()
 simulateFIFO' state = do
   stash 1 $ cache state
@@ -109,12 +118,6 @@ simulateFIFO' state = do
   if hasEnded
     then return ()
     else simulateFIFO' state
-
-outputStats :: Float -> Simulation s -> ST s Stats
-outputStats duration state = do
-  hits <- readSTRef $ getHits state
-  misses <- readSTRef $ getMisses state
-  return $ Stats hits misses duration
 
 simulateFIFO :: Int -> Int -> Float -> ST s Stats
 simulateFIFO seed size duration = do
