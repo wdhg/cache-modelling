@@ -3,10 +3,17 @@
 
 module Simulation where
 
+import Control.Monad.Random
 import Control.Monad.ST
 import Data.Array
 import Data.Array.ST
 import Data.STRef
+
+-- TODO consider using a maclauran series expansion to approximate log
+interarrivalTime :: (Floating a, Random a) => a -> Rand StdGen a
+interarrivalTime rate = do
+  u <- getRandomR (0, 1)
+  return $ (1 / rate) * log (1 / (1 - u))
 
 data FIFOCache :: * -> * where
   FIFOCache ::
