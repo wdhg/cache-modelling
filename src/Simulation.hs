@@ -1,5 +1,7 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Simulation where
 
@@ -12,75 +14,89 @@ import PQueue
 import Request
 import System.Random
 
-data SimState :: * -> * where
+class Cache c s where
+  stash :: Int -> Simulation c s Bool
+
+instance Cache FIFOCache s where
+  stash x = do
+    cache <- getCache
+    alreadyCached <- lift (x `cachedIn` cache)
+    if alreadyCached
+      then return True
+      else do
+        lift $ writeToNextIndex cache x
+        return False
+
+data SimState :: (* -> *) -> * -> * where
   SimState ::
-    { cache :: FIFOCache s, -- read only (contains STRefs)
+    Cache c s =>
+    { cache :: c s, -- read only (contains STRefs)
       timeLimit :: Float, -- read only
       historyST :: STRef s [Event],
       futureRequestsST :: STRef s (PQueue Request),
       timeST :: STRef s Float,
       genST :: STRef s StdGen
     } ->
-    SimState s
+    SimState c s
 
-type Simulation s a = ReaderT (SimState s) (ST s) a
-
-get :: (SimState s -> STRef s a) -> Simulation s a
-get field = asks field >>= (lift . readSTRef)
-
-getCache :: Simulation s (FIFOCache s)
-getCache = asks cache
-
-getTimeLimit :: Simulation s Float
-getTimeLimit = asks timeLimit
-
-getHistory :: Simulation s [Event]
-getHistory = get historyST
-
-getFutureRequests :: Simulation s (PQueue Request)
-getFutureRequests = get futureRequestsST
-
-getTime :: Simulation s Float
-getTime = get timeST
-
-getGen :: Simulation s StdGen
-getGen = get genST
-
-set :: (SimState s -> STRef s a) -> a -> Simulation s ()
-set field value = asks field >>= (\x -> lift $ writeSTRef x value)
-
-setHistory :: [Event] -> Simulation s ()
-setHistory = set historyST
-
-setFutureRequests :: PQueue Request -> Simulation s ()
-setFutureRequests = set futureRequestsST
-
-setTime :: Float -> Simulation s ()
-setTime = set timeST
-
-setGen :: StdGen -> Simulation s ()
-setGen = set genST
-
-newSimulation :: Int -> Float -> FIFOCache s -> ST s (SimState s)
-newSimulation seed duration cache = do
+newSimState :: Cache c s => c s -> Int -> Float -> ST s (SimState c s)
+newSimState cache seed duration = do
   initHistory <- newSTRef []
   initArrivals <- newSTRef Nil
   initTime <- newSTRef 0
   initGen <- newSTRef (mkStdGen seed)
   return $ SimState cache duration initHistory initArrivals initTime initGen
 
-ended :: Simulation s Bool
+type Simulation c s a = ReaderT (SimState c s) (ST s) a
+
+get :: (SimState c s -> STRef s a) -> Simulation c s a
+get field = asks field >>= (lift . readSTRef)
+
+getCache :: Simulation c s (c s)
+getCache = asks cache
+
+getTimeLimit :: Simulation c s Float
+getTimeLimit = asks timeLimit
+
+getHistory :: Simulation c s [Event]
+getHistory = get historyST
+
+getFutureRequests :: Simulation c s (PQueue Request)
+getFutureRequests = get futureRequestsST
+
+getTime :: Simulation c s Float
+getTime = get timeST
+
+getGen :: Simulation c s StdGen
+getGen = get genST
+
+set :: (SimState c s -> STRef s a) -> a -> Simulation c s ()
+set field value = asks field >>= (\x -> lift $ writeSTRef x value)
+
+setHistory :: [Event] -> Simulation c s ()
+setHistory = set historyST
+
+setFutureRequests :: PQueue Request -> Simulation c s ()
+setFutureRequests = set futureRequestsST
+
+setTime :: Float -> Simulation c s ()
+setTime = set timeST
+
+setGen :: StdGen -> Simulation c s ()
+setGen = set genST
+
+ended :: Simulation c s Bool
 ended = do
   time <- getTime
   endTime <- getTimeLimit
   return $ time >= endTime
 
-logEvent :: Event -> Simulation s ()
+logEvent :: Event -> Simulation c s ()
 logEvent event = do
   events <- getHistory
   setHistory (event : events)
 
-initialiseRequest :: Int -> Simulation s ()
+initialiseRequest :: Int -> Simulation c s ()
 initialiseRequest itemID = do
   currentTime <- getTime
   gen <- getGen
@@ -89,7 +105,7 @@ initialiseRequest itemID = do
   futureRequests <- getFutureRequests
   setFutureRequests $ queue request futureRequests
 
-completeNextRequest :: Simulation s ()
+completeNextRequest :: Cache c s => Simulation c s ()
 completeNextRequest = do
   futureRequests <- getFutureRequests
   let (Request newCurrentTime itemID, futureRequests') = dequeue futureRequests
@@ -97,28 +113,28 @@ completeNextRequest = do
   setFutureRequests futureRequests'
   initialiseRequest itemID
   cache <- getCache
-  cacheHit <- lift $ stash cache itemID
+  cacheHit <- stash itemID
   if cacheHit
     then logEvent $ Hit itemID newCurrentTime
     else logEvent $ Miss itemID newCurrentTime
 
-initialiseRequests :: Int -> Simulation s ()
+initialiseRequests :: Int -> Simulation c s ()
 initialiseRequests count = mapM_ initialiseRequest [0 .. count - 1]
 
-simulateFIFO' :: Simulation s ()
-simulateFIFO' = do
+simulate' :: Cache c s => Simulation c s ()
+simulate' = do
   completeNextRequest
   hasEnded <- ended
-  unless hasEnded simulateFIFO'
+  unless hasEnded simulate'
 
-simulateFIFO :: Int -> Simulation s [Event]
-simulateFIFO itemCount = do
+simulate :: Cache c s => Int -> Simulation c s [Event]
+simulate itemCount = do
   initialiseRequests itemCount
-  simulateFIFO'
+  simulate'
   getHistory
 
-simulate :: Int -> Int -> Int -> Float -> [Event]
-simulate seed queueSize itemCount duration = runST $ do
+simulateFIFO :: Int -> Int -> Int -> Float -> [Event]
+simulateFIFO seed queueSize itemCount duration = runST $ do
   cache <- newFIFO queueSize
-  state <- newSimulation seed duration cache
-  runReaderT (simulateFIFO itemCount) state
+  state <- newSimState cache seed duration
+  runReaderT (simulate itemCount) state

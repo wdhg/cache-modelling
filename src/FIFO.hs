@@ -36,17 +36,7 @@ getNextIndex cache = do
     else writeSTRef (getIndex cache) lowerBound
   return index
 
--- x is not in cache
-stash' :: FIFOCache s -> Int -> ST s Bool
-stash' cache x = do
+writeToNextIndex :: FIFOCache s -> Int -> ST s ()
+writeToNextIndex cache x = do
   index <- getNextIndex cache
   writeArray (getArray cache) index x
-  return False
-
--- returns true if there was a cache hit
-stash :: FIFOCache s -> Int -> ST s Bool
-stash cache x = do
-  alreadyCached <- x `cachedIn` cache
-  if alreadyCached
-    then return True
-    else stash' cache x
