@@ -1,8 +1,11 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module FIFO where
 
+import Cache
 import Control.Monad.ST
 import Data.Array
 import Data.Array.ST
@@ -22,21 +25,18 @@ newFIFO size = do
   initNextIndex <- newSTRef 0
   return $ FIFOCache initArray initNextIndex
 
-cachedIn :: Int -> FIFOCache s -> ST s Bool
-cachedIn x cache = do
-  xs <- getElems $ arrayST cache
-  return (x `elem` xs)
+instance Cache FIFOCache s where
+  cachedIn x cache = do
+    xs <- getElems $ arrayST cache
+    return (x `elem` xs)
 
-getNextIndex :: FIFOCache s -> ST s Int
-getNextIndex cache = do
-  index <- readSTRef $ indexST cache
-  (lowerBound, upperBound) <- getBounds $ arrayST cache
-  if index < upperBound
-    then writeSTRef (indexST cache) (succ index)
-    else writeSTRef (indexST cache) lowerBound
-  return index
+  evict cache = do
+    index <- readSTRef $ indexST cache
+    (lowerBound, upperBound) <- getBounds $ arrayST cache
+    if index < upperBound
+      then writeSTRef (indexST cache) (succ index)
+      else writeSTRef (indexST cache) lowerBound
 
-writeToNextIndex :: FIFOCache s -> Int -> ST s ()
-writeToNextIndex cache x = do
-  index <- getNextIndex cache
-  writeArray (arrayST cache) index x
+  store x cache = do
+    index <- readSTRef $ indexST cache
+    writeArray (arrayST cache) index x

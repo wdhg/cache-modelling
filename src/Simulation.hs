@@ -1,31 +1,20 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Simulation where
 
+import Cache
 import Control.Monad.Reader
 import Control.Monad.ST
+import Data.Array.ST (getElems)
 import Data.STRef
 import Event
 import FIFO
+import LRU
 import PQueue
 import Request
 import System.Random
-
-class Cache c s where
-  stash :: Int -> Simulation c s Bool
-
-instance Cache FIFOCache s where
-  stash x = do
-    cache <- getCache
-    alreadyCached <- lift (x `cachedIn` cache)
-    if alreadyCached
-      then return True
-      else do
-        lift $ writeToNextIndex cache x
-        return False
 
 data SimState :: (* -> *) -> * -> * where
   SimState ::
@@ -113,7 +102,7 @@ completeNextRequest = do
   setFutureRequests futureRequests'
   newRequestFor itemID
   cache <- getCache
-  cacheHit <- stash itemID
+  cacheHit <- lift $ stash itemID cache
   if cacheHit
     then logEvent $ Hit itemID newCurrentTime
     else logEvent $ Miss itemID newCurrentTime
@@ -134,7 +123,13 @@ simulate itemCount = do
   getHistory
 
 simulateFIFO :: Int -> Int -> Int -> Float -> [Event]
-simulateFIFO seed queueSize itemCount duration = runST $ do
-  cache <- newFIFO queueSize
+simulateFIFO seed cacheSize itemCount duration = runST $ do
+  cache <- newFIFO cacheSize
+  state <- newSimState cache seed duration
+  runReaderT (simulate itemCount) state
+
+simulateLRU :: Int -> Int -> Int -> Float -> [Event]
+simulateLRU seed cacheSize itemCount duration = runST $ do
+  cache <- newLRUCache cacheSize
   state <- newSimState cache seed duration
   runReaderT (simulate itemCount) state

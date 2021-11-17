@@ -25,8 +25,10 @@ source-repository head
 
 library
   exposed-modules:
+      Cache
       Event
       FIFO
+      LRU
       PQueue
       Request
       Simulation
@@ -37,6 +39,7 @@ library
   build-depends:
       array ==0.5.*
     , base >=4.7 && <5
+    , containers ==0.6.*
     , mtl >=2.2 && <3
     , random ==1.2.*
   default-language: Haskell2010
@@ -52,6 +55,7 @@ executable cache-modelling-exe
       array ==0.5.*
     , base >=4.7 && <5
     , cache-modelling
+    , containers ==0.6.*
     , mtl >=2.2 && <3
     , random ==1.2.*
   default-language: Haskell2010
@@ -68,6 +72,7 @@ test-suite cache-modelling-test
       array ==0.5.*
     , base >=4.7 && <5
     , cache-modelling
+    , containers ==0.6.*
     , mtl >=2.2 && <3
     , random ==1.2.*
   default-language: Haskell2010
