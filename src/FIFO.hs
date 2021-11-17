@@ -11,8 +11,8 @@ import Event
 
 data FIFOCache :: * -> * where
   FIFOCache ::
-    { getArray :: STArray s Int Int,
-      getIndex :: STRef s Int
+    { arrayST :: STArray s Int Int,
+      indexST :: STRef s Int
     } ->
     FIFOCache s
 
@@ -24,19 +24,19 @@ newFIFO size = do
 
 cachedIn :: Int -> FIFOCache s -> ST s Bool
 cachedIn x cache = do
-  xs <- getElems $ getArray cache
+  xs <- getElems $ arrayST cache
   return (x `elem` xs)
 
 getNextIndex :: FIFOCache s -> ST s Int
 getNextIndex cache = do
-  index <- readSTRef $ getIndex cache
-  (lowerBound, upperBound) <- getBounds $ getArray cache
+  index <- readSTRef $ indexST cache
+  (lowerBound, upperBound) <- getBounds $ arrayST cache
   if index < upperBound
-    then writeSTRef (getIndex cache) (succ index)
-    else writeSTRef (getIndex cache) lowerBound
+    then writeSTRef (indexST cache) (succ index)
+    else writeSTRef (indexST cache) lowerBound
   return index
 
 writeToNextIndex :: FIFOCache s -> Int -> ST s ()
 writeToNextIndex cache x = do
   index <- getNextIndex cache
-  writeArray (getArray cache) index x
+  writeArray (arrayST cache) index x
