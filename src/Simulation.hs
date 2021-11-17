@@ -5,6 +5,7 @@
 module Simulation where
 
 import Cache
+import CacheType
 import Control.Monad.Reader
 import Control.Monad.ST
 import Data.Array.ST (getElems)
@@ -13,7 +14,9 @@ import Event
 import FIFO
 import LRU
 import PQueue
+import Params
 import Request
+import Results
 import System.Random
 
 data SimState :: (* -> *) -> * -> * where
@@ -110,26 +113,31 @@ completeNextRequest = do
 initialiseRequests :: Int -> Simulation c s ()
 initialiseRequests count = mapM_ newRequestFor [0 .. count - 1]
 
-simulate' :: Cache c s => Simulation c s ()
-simulate' = do
+simulateLoop :: Cache c s => Simulation c s ()
+simulateLoop = do
   completeNextRequest
   hasEnded <- ended
-  unless hasEnded simulate'
+  unless hasEnded simulateLoop
 
-simulate :: Cache c s => Int -> Simulation c s [Event]
-simulate itemCount = do
+simulate'' :: Cache c s => Int -> Simulation c s [Event]
+simulate'' itemCount = do
   initialiseRequests itemCount
-  simulate'
+  simulateLoop
   getHistory
 
-simulateFIFO :: Int -> Int -> Int -> Float -> [Event]
-simulateFIFO seed cacheSize itemCount duration = runST $ do
-  cache <- newFIFO cacheSize
-  state <- newSimState cache seed duration
-  runReaderT (simulate itemCount) state
+simulate' :: Cache c s => (Int -> ST s (c s)) -> Params -> ST s [Event]
+simulate' newCache params = do
+  cache <- newCache $ cacheSize params
+  state <- newSimState cache (seed params) (duration params)
+  runReaderT (simulate'' $ itemCount params) state
 
-simulateLRU :: Int -> Int -> Int -> Float -> [Event]
-simulateLRU seed cacheSize itemCount duration = runST $ do
-  cache <- newLRUCache cacheSize
-  state <- newSimState cache seed duration
-  runReaderT (simulate itemCount) state
+simulate :: Params -> Results
+simulate params = runST $ do
+  events <- case cacheType params of
+    FIFO -> simulate' newFIFOCache params
+    LRU -> simulate' newLRUCache params
+  return
+    Results
+      { events = events,
+        params = params
+      }

@@ -19,8 +19,8 @@ data FIFOCache :: * -> * where
     } ->
     FIFOCache s
 
-newFIFO :: Int -> ST s (FIFOCache s)
-newFIFO size = do
+newFIFOCache :: Int -> ST s (FIFOCache s)
+newFIFOCache size = do
   initArray <- newArray (0, size - 1) (-1) :: ST s (STArray s Int Int)
   initNextIndex <- newSTRef 0
   return $ FIFOCache initArray initNextIndex

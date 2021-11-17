@@ -26,11 +26,14 @@ source-repository head
 library
   exposed-modules:
       Cache
+      CacheType
       Event
       FIFO
       LRU
+      Params
       PQueue
       Request
+      Results
       Simulation
   other-modules:
       Paths_cache_modelling
@@ -40,6 +43,7 @@ library
       array ==0.5.*
     , base >=4.7 && <5
     , containers ==0.6.*
+    , json >=0.10 && <1
     , mtl >=2.2 && <3
     , random ==1.2.*
   default-language: Haskell2010
@@ -56,6 +60,7 @@ executable cache-modelling-exe
     , base >=4.7 && <5
     , cache-modelling
     , containers ==0.6.*
+    , json >=0.10 && <1
     , mtl >=2.2 && <3
     , random ==1.2.*
   default-language: Haskell2010
@@ -73,6 +78,7 @@ test-suite cache-modelling-test
     , base >=4.7 && <5
     , cache-modelling
     , containers ==0.6.*
+    , json >=0.10 && <1
     , mtl >=2.2 && <3
     , random ==1.2.*
   default-language: Haskell2010
