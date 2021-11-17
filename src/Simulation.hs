@@ -96,8 +96,8 @@ logEvent event = do
   events <- getHistory
   setHistory (event : events)
 
-initialiseRequest :: Int -> Simulation c s ()
-initialiseRequest itemID = do
+newRequestFor :: Int -> Simulation c s ()
+newRequestFor itemID = do
   currentTime <- getTime
   gen <- getGen
   let (request, gen') = newRequest currentTime itemID gen
@@ -111,7 +111,7 @@ completeNextRequest = do
   let (Request newCurrentTime itemID, futureRequests') = dequeue futureRequests
   setTime newCurrentTime
   setFutureRequests futureRequests'
-  initialiseRequest itemID
+  newRequestFor itemID
   cache <- getCache
   cacheHit <- stash itemID
   if cacheHit
@@ -119,7 +119,7 @@ completeNextRequest = do
     else logEvent $ Miss itemID newCurrentTime
 
 initialiseRequests :: Int -> Simulation c s ()
-initialiseRequests count = mapM_ initialiseRequest [0 .. count - 1]
+initialiseRequests count = mapM_ newRequestFor [0 .. count - 1]
 
 simulate' :: Cache c s => Simulation c s ()
 simulate' = do
