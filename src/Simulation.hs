@@ -8,8 +8,8 @@ import Control.Monad.ST
 import Data.STRef
 import Event
 import FIFO
-import Job
 import PQueue
+import Request
 import System.Random
 
 data SimState :: * -> * where
@@ -17,7 +17,7 @@ data SimState :: * -> * where
     { cache :: FIFOCache s, -- read only (contains STRefs)
       timeLimit :: Float, -- read only
       historyST :: STRef s [Event],
-      futureJobsST :: STRef s (PQueue Job),
+      futureRequestsST :: STRef s (PQueue Request),
       timeST :: STRef s Float,
       genST :: STRef s StdGen
     } ->
@@ -37,8 +37,8 @@ getTimeLimit = asks timeLimit
 getHistory :: Simulation s [Event]
 getHistory = get historyST
 
-getFutureJobs :: Simulation s (PQueue Job)
-getFutureJobs = get futureJobsST
+getFutureRequests :: Simulation s (PQueue Request)
+getFutureRequests = get futureRequestsST
 
 getTime :: Simulation s Float
 getTime = get timeST
@@ -52,8 +52,8 @@ set field value = asks field >>= (\x -> lift $ writeSTRef x value)
 setHistory :: [Event] -> Simulation s ()
 setHistory = set historyST
 
-setFutureJobs :: PQueue Job -> Simulation s ()
-setFutureJobs = set futureJobsST
+setFutureRequests :: PQueue Request -> Simulation s ()
+setFutureRequests = set futureRequestsST
 
 setTime :: Float -> Simulation s ()
 setTime = set timeST
@@ -80,40 +80,40 @@ logEvent event = do
   events <- getHistory
   setHistory (event : events)
 
-initialiseJob :: Int -> Simulation s ()
-initialiseJob itemID = do
+initialiseRequest :: Int -> Simulation s ()
+initialiseRequest itemID = do
   currentTime <- getTime
   gen <- getGen
-  let (job, gen') = newJob currentTime itemID gen
+  let (request, gen') = newRequest currentTime itemID gen
   setGen gen'
-  futureJobs <- getFutureJobs
-  setFutureJobs $ queue job futureJobs
+  futureRequests <- getFutureRequests
+  setFutureRequests $ queue request futureRequests
 
-completeNextJob :: Simulation s ()
-completeNextJob = do
-  futureJobs <- getFutureJobs
-  let (Job newCurrentTime itemID, futureJobs') = dequeue futureJobs
+completeNextRequest :: Simulation s ()
+completeNextRequest = do
+  futureRequests <- getFutureRequests
+  let (Request newCurrentTime itemID, futureRequests') = dequeue futureRequests
   setTime newCurrentTime
-  setFutureJobs futureJobs'
-  initialiseJob itemID
+  setFutureRequests futureRequests'
+  initialiseRequest itemID
   cache <- getCache
   cacheHit <- lift $ stash cache itemID
   if cacheHit
     then logEvent $ Hit itemID newCurrentTime
     else logEvent $ Miss itemID newCurrentTime
 
-initialiseJobs :: Int -> Simulation s ()
-initialiseJobs count = mapM_ initialiseJob [0 .. count - 1]
+initialiseRequests :: Int -> Simulation s ()
+initialiseRequests count = mapM_ initialiseRequest [0 .. count - 1]
 
 simulateFIFO' :: Simulation s ()
 simulateFIFO' = do
-  completeNextJob
+  completeNextRequest
   hasEnded <- ended
   unless hasEnded simulateFIFO'
 
 simulateFIFO :: Int -> Simulation s [Event]
 simulateFIFO itemCount = do
-  initialiseJobs itemCount
+  initialiseRequests itemCount
   simulateFIFO'
   getHistory
 

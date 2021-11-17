@@ -28,8 +28,8 @@ library
       Cache
       Event
       FIFO
-      Job
       PQueue
+      Request
       Simulation
   other-modules:
       Paths_cache_modelling
