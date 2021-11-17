@@ -22,7 +22,7 @@ experiments =
 runExperiment :: Params -> IO ()
 runExperiment params = do
   let results = simulate params
-      filename = (show $ cacheType params) ++ "-" ++ (show $ duration params) ++ "-" ++ (show $ seed params) ++ ".json"
+      filename = show (cacheType params) ++ "-" ++ show (duration params) ++ "-" ++ show (seed params) ++ ".json"
   writeFile filename $ encode results
 
 main :: IO ()
