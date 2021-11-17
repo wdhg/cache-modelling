@@ -1,164 +1,124 @@
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 module Simulation where
 
 import Control.Monad.Reader
 import Control.Monad.ST
-import Data.Array
-import Data.Array.ST
-import Data.Foldable (foldr')
 import Data.STRef
+import Event
+import FIFO
+import Job
 import PQueue
 import System.Random
-import Text.Printf
 
--- time and item ID
-data Job = Job Float Int deriving (Eq, Ord)
-
-data FIFOCache :: * -> * where
-  FIFOCache ::
-    { getArray :: STArray s Int Int,
-      getIndex :: STRef s Int
+data SimState :: * -> * where
+  SimState ::
+    { cache :: FIFOCache s, -- read only (contains STRefs)
+      timeLimit :: Float, -- read only
+      historyST :: STRef s [Event],
+      futureJobsST :: STRef s (PQueue Job),
+      timeST :: STRef s Float,
+      genST :: STRef s StdGen
     } ->
-    FIFOCache s
+    SimState s
 
-newFIFO :: Int -> ST s (FIFOCache s)
-newFIFO size = do
-  initArray <- newArray (0, size - 1) (-1) :: ST s (STArray s Int Int)
-  initNextIndex <- newSTRef 0
-  return $ FIFOCache initArray initNextIndex
+type Simulation s a = ReaderT (SimState s) (ST s) a
 
-data Event = Hit Int Float | Miss Int Float
+get :: (SimState s -> STRef s a) -> Simulation s a
+get field = asks field >>= (lift . readSTRef)
 
-instance Show Event where
-  show (Hit id time) = "[" ++ printf "%014.5f" time ++ "] HIT  " ++ show id
-  show (Miss id time) = "[" ++ printf "%014.5f" time ++ "] MISS " ++ show id
+getCache :: Simulation s (FIFOCache s)
+getCache = asks cache
 
-data Simulation :: * -> * where
-  Simulation ::
-    { cache :: FIFOCache s,
-      getHistory :: STRef s [Event],
-      getArrivals :: STRef s (PQueue Job),
-      getTime :: STRef s Float,
-      getTimeLimit :: Float,
-      getGen :: STRef s StdGen
-    } ->
-    Simulation s
+getTimeLimit :: Simulation s Float
+getTimeLimit = asks timeLimit
 
-newSimulation :: Int -> Float -> FIFOCache s -> ST s (Simulation s)
+getHistory :: Simulation s [Event]
+getHistory = get historyST
+
+getFutureJobs :: Simulation s (PQueue Job)
+getFutureJobs = get futureJobsST
+
+getTime :: Simulation s Float
+getTime = get timeST
+
+getGen :: Simulation s StdGen
+getGen = get genST
+
+set :: (SimState s -> STRef s a) -> a -> Simulation s ()
+set field value = asks field >>= (\x -> lift $ writeSTRef x value)
+
+setHistory :: [Event] -> Simulation s ()
+setHistory = set historyST
+
+setFutureJobs :: PQueue Job -> Simulation s ()
+setFutureJobs = set futureJobsST
+
+setTime :: Float -> Simulation s ()
+setTime = set timeST
+
+setGen :: StdGen -> Simulation s ()
+setGen = set genST
+
+newSimulation :: Int -> Float -> FIFOCache s -> ST s (SimState s)
 newSimulation seed duration cache = do
   initHistory <- newSTRef []
   initArrivals <- newSTRef Nil
   initTime <- newSTRef 0
   initGen <- newSTRef (mkStdGen seed)
-  return $ Simulation cache initHistory initArrivals initTime duration initGen
+  return $ SimState cache duration initHistory initArrivals initTime initGen
 
-ended :: Simulation s -> ST s Bool
-ended state = do
-  time <- readSTRef $ getTime state
-  return $ time >= getTimeLimit state
+ended :: Simulation s Bool
+ended = do
+  time <- getTime
+  endTime <- getTimeLimit
+  return $ time >= endTime
 
--- TODO consider using a maclauran series expansion to approximate log
--- F(X <= x) = 1 - e^(-rate * x)
-interarrivalTime :: Float -> Simulation s -> ST s Float
-interarrivalTime rate state = do
-  gen <- readSTRef $ getGen state
-  let (u, gen') = randomR (0, 1) gen
-  writeSTRef (getGen state) gen'
-  return ((1 / rate) * log (1 / (1 - u)))
+logEvent :: Event -> Simulation s ()
+logEvent event = do
+  events <- getHistory
+  setHistory (event : events)
 
-pickTime :: Float -> Simulation s -> ST s Float
-pickTime rate state = do
-  timeFromNow <- interarrivalTime rate state
-  currentTime <- readSTRef $ getTime state
-  return $ currentTime + timeFromNow
+initialiseJob :: Int -> Simulation s ()
+initialiseJob itemID = do
+  currentTime <- getTime
+  gen <- getGen
+  let (job, gen') = newJob currentTime itemID gen
+  setGen gen'
+  futureJobs <- getFutureJobs
+  setFutureJobs $ queue job futureJobs
 
-cachedIn :: Int -> FIFOCache s -> ST s Bool
-cachedIn x cache = do
-  xs <- getElems $ getArray cache
-  return (x `elem` xs)
+completeNextJob :: Simulation s ()
+completeNextJob = do
+  futureJobs <- getFutureJobs
+  let (Job newCurrentTime itemID, futureJobs') = dequeue futureJobs
+  setTime newCurrentTime
+  setFutureJobs futureJobs'
+  initialiseJob itemID
+  cache <- getCache
+  cacheHit <- lift $ stash cache itemID
+  if cacheHit
+    then logEvent $ Hit itemID newCurrentTime
+    else logEvent $ Miss itemID newCurrentTime
 
-getNextIndex :: FIFOCache s -> ST s Int
-getNextIndex cache = do
-  index <- readSTRef $ getIndex cache
-  (lowerBound, upperBound) <- getBounds $ getArray cache
-  if index < upperBound
-    then writeSTRef (getIndex cache) (succ index)
-    else writeSTRef (getIndex cache) lowerBound
-  return index
+initialiseJobs :: Int -> Simulation s ()
+initialiseJobs count = mapM_ initialiseJob [0 .. count - 1]
 
--- x is not in cache
-stash' :: Int -> FIFOCache s -> ST s ()
-stash' x cache = do
-  index <- getNextIndex cache
-  writeArray (getArray cache) index x
-  return ()
+simulateFIFO' :: Simulation s ()
+simulateFIFO' = do
+  completeNextJob
+  hasEnded <- ended
+  unless hasEnded simulateFIFO'
 
-incrementStat :: Simulation s -> (Simulation s -> STRef s Int) -> ST s ()
-incrementStat state getStat = do
-  stat <- readSTRef $ getStat state
-  writeSTRef (getStat state) (stat + 1)
-  return ()
+simulateFIFO :: Int -> Simulation s [Event]
+simulateFIFO itemCount = do
+  initialiseJobs itemCount
+  simulateFIFO'
+  getHistory
 
-logEvent :: Simulation s -> (Float -> Event) -> ST s ()
-logEvent state eventAt = do
-  time <- readSTRef $ getTime state
-  events <- readSTRef $ getHistory state
-  let event = eventAt time
-  writeSTRef (getHistory state) (event : events)
-  return ()
-
-stash :: Int -> Simulation s -> ST s ()
-stash x state = do
-  alreadyCached <- x `cachedIn` cache state
-  if alreadyCached
-    then logEvent state (Hit x)
-    else do
-      logEvent state (Miss x)
-      stash' x (cache state)
-
-calcRate :: Int -> Float
-calcRate itemID = 1 / (1 + fromIntegral itemID)
-
-getNewJob :: Simulation s -> Int -> ST s Job
-getNewJob state itemID = do
-  time <- pickTime (calcRate itemID) state
-  return $ Job time itemID
-
-initialiseJobs :: Simulation s -> Int -> ST s ()
-initialiseJobs state processes = do
-  jobs <- mapM (getNewJob state) [0 .. processes - 1]
-  writeSTRef (getArrivals state) (foldr' queue Nil jobs)
-
-completeNextJob :: Simulation s -> ST s ()
-completeNextJob state = do
-  arrivals <- readSTRef $ getArrivals state
-  let (Job time itemID, arrivals') = dequeue arrivals
-  newJob <- getNewJob state itemID
-  writeSTRef (getArrivals state) (queue newJob arrivals')
-  writeSTRef (getTime state) time
-  stash itemID state
-  return ()
-
-simulateFIFO' :: Simulation s -> ST s ()
-simulateFIFO' state = do
-  completeNextJob state
-  hasEnded <- ended state
-  if hasEnded
-    then return ()
-    else simulateFIFO' state
-
-simulateFIFO :: Int -> Int -> Int -> Float -> ST s [Event]
-simulateFIFO seed queueSize processes duration = do
+simulate :: Int -> Int -> Int -> Float -> [Event]
+simulate seed queueSize itemCount duration = runST $ do
   cache <- newFIFO queueSize
   state <- newSimulation seed duration cache
-  initialiseJobs state processes
-  simulateFIFO' state
-  readSTRef $ getHistory state
-
-simulate :: IO ()
-simulate = mapM_ print $ runST $ simulateFIFO 1 1024 65536 1000
+  runReaderT (simulateFIFO itemCount) state

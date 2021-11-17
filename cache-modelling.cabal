@@ -25,6 +25,10 @@ source-repository head
 
 library
   exposed-modules:
+      Cache
+      Event
+      FIFO
+      Job
       PQueue
       Simulation
   other-modules:
