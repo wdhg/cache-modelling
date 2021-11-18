@@ -21,9 +21,15 @@ experiments =
 
 runExperiment :: Params -> IO ()
 runExperiment params = do
+  let title = show (cacheType params) ++ "-" ++ show (duration params) ++ "-" ++ show (seed params)
+  putStrLn $ "==== " ++ title ++ " ===="
+  putStrLn "Running experiment..."
   let results = simulate params
-      filename = show (cacheType params) ++ "-" ++ show (duration params) ++ "-" ++ show (seed params) ++ ".json"
+      filename = title ++ ".json"
+  putStrLn "Done."
+  putStrLn $ "Writing to file " ++ filename ++ "..."
   writeFile filename $ encode results
+  putStrLn "Done."
 
 main :: IO ()
 main = mapM_ runExperiment experiments
