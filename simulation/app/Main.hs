@@ -9,93 +9,21 @@ import Simulation
 import System.Directory
 import Text.JSON
 
-experiments :: [Params]
-experiments =
-  [ Params
-      { cacheType = FIFO,
-        seed = 0,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 10
-      },
+makeExperiments :: [CacheType] -> [Int] -> [Int] -> [Int] -> [Float] -> [Params]
+makeExperiments cacheTypes seeds cacheSizes itemCounts durations = do
+  cacheType <- cacheTypes
+  seed <- seeds
+  cacheSize <- cacheSizes
+  itemCount <- itemCounts
+  duration <- durations
+  return $
     Params
-      { cacheType = FIFO,
-        seed = 1,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 100
-      },
-    Params
-      { cacheType = FIFO,
-        seed = 2,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 1000
-      },
-    Params
-      { cacheType = FIFO,
-        seed = 3,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 10000
-      },
-    Params
-      { cacheType = FIFO,
-        seed = 4,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 100000
-      },
-    Params
-      { cacheType = FIFO,
-        seed = 5,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 1000000
-      },
-    Params
-      { cacheType = LRU,
-        seed = 0,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 10
-      },
-    Params
-      { cacheType = LRU,
-        seed = 1,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 100
-      },
-    Params
-      { cacheType = LRU,
-        seed = 2,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 1000
-      },
-    Params
-      { cacheType = LRU,
-        seed = 3,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 10000
-      },
-    Params
-      { cacheType = LRU,
-        seed = 4,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 100000
-      },
-    Params
-      { cacheType = LRU,
-        seed = 5,
-        cacheSize = 1024,
-        itemCount = 65536,
-        duration = 1000000
+      { cacheType = cacheType,
+        seed = seed,
+        cacheSize = cacheSize,
+        itemCount = itemCount,
+        duration = duration
       }
-  ]
 
 runExperiment :: Params -> IO ()
 runExperiment params = do
@@ -121,4 +49,4 @@ runExperiment params = do
   putStrLn "Done."
 
 main :: IO ()
-main = mapM_ runExperiment experiments
+main = mapM_ runExperiment $ makeExperiments [FIFO, LRU] [0 .. 4] [1024] [65536] [10, 100, 1000, 10000, 100000, 1000000]
