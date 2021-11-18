@@ -99,7 +99,16 @@ experiments =
 
 runExperiment :: Params -> IO ()
 runExperiment params = do
-  let title = show (cacheType params) ++ "-" ++ show (duration params) ++ "-" ++ show (seed params)
+  let title =
+        show (cacheType params)
+          ++ "-"
+          ++ show (seed params)
+          ++ "-"
+          ++ show (cacheSize params)
+          ++ "-"
+          ++ show (itemCount params)
+          ++ "-"
+          ++ show (floor $ duration params)
   putStrLn $ "==== " ++ title ++ " ===="
   putStrLn "Running experiment..."
   let results = simulate params
