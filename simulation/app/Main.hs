@@ -14,23 +14,21 @@ makeExperiments = liftM5 Params
 
 runExperiment :: Params -> IO ()
 runExperiment params = do
-  let title =
+  let results = simulate params
+      outputDir = "../simulation-output/"
+      filename = outputDir ++ title ++ ".json"
+      title =
         show (cacheType params)
-          ++ "-"
-          ++ show (seed params)
           ++ "-"
           ++ show (cacheSize params)
           ++ "-"
           ++ show (itemCount params)
           ++ "-"
+          ++ show (seed params)
+          ++ "-"
           ++ show (floor $ duration params)
   putStrLn $ "==== " ++ title ++ " ===="
-  putStrLn "Running experiment..."
-  let results = simulate params
-      outputDir = "../simulation-output/"
-      filename = outputDir ++ title ++ ".json"
-  putStrLn "Done."
-  putStrLn $ "Writing to file " ++ filename ++ "..."
+  putStrLn $ "Running experiment and writing to file " ++ filename ++ "..."
   createDirectoryIfMissing True outputDir
   writeFile filename $ encode results
   putStrLn "Done."
