@@ -2,13 +2,12 @@ module Main where
 
 import CacheType
 import Control.Monad (liftM5)
-import Control.Monad.ST
 import Data.Foldable (foldr')
 import Params
 import Results
 import Simulation
-import System.Directory
-import Text.JSON
+import System.Directory (createDirectoryIfMissing)
+import Text.JSON (encode)
 
 makeExperiments :: [CacheType] -> [Int] -> [Int] -> [Int] -> [Float] -> [Params]
 makeExperiments = liftM5 Params
