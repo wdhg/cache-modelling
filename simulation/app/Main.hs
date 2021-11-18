@@ -1,6 +1,7 @@
 module Main where
 
 import CacheType
+import Control.Monad (liftM5)
 import Control.Monad.ST
 import Data.Foldable (foldr')
 import Params
@@ -10,20 +11,7 @@ import System.Directory
 import Text.JSON
 
 makeExperiments :: [CacheType] -> [Int] -> [Int] -> [Int] -> [Float] -> [Params]
-makeExperiments cacheTypes seeds cacheSizes itemCounts durations = do
-  cacheType <- cacheTypes
-  seed <- seeds
-  cacheSize <- cacheSizes
-  itemCount <- itemCounts
-  duration <- durations
-  return $
-    Params
-      { cacheType = cacheType,
-        seed = seed,
-        cacheSize = cacheSize,
-        itemCount = itemCount,
-        duration = duration
-      }
+makeExperiments = liftM5 Params
 
 runExperiment :: Params -> IO ()
 runExperiment params = do
