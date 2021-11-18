@@ -43,6 +43,7 @@ library
       array ==0.5.*
     , base >=4.7 && <5
     , containers ==0.6.*
+    , directory >=1.3 && <2
     , json >=0.10 && <1
     , mtl >=2.2 && <3
     , random ==1.2.*
@@ -60,6 +61,7 @@ executable cache-modelling-exe
     , base >=4.7 && <5
     , cache-modelling
     , containers ==0.6.*
+    , directory >=1.3 && <2
     , json >=0.10 && <1
     , mtl >=2.2 && <3
     , random ==1.2.*
@@ -78,6 +80,7 @@ test-suite cache-modelling-test
     , base >=4.7 && <5
     , cache-modelling
     , containers ==0.6.*
+    , directory >=1.3 && <2
     , json >=0.10 && <1
     , mtl >=2.2 && <3
     , random ==1.2.*

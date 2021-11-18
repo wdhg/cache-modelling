@@ -6,6 +6,7 @@ import Data.Foldable (foldr')
 import Params
 import Results
 import Simulation
+import System.Directory
 import Text.JSON
 
 experiments :: [Params]
@@ -95,7 +96,6 @@ experiments =
         duration = 1000000
       }
   ]
-    >>= (\p -> map (\s -> p {seed = s}) [0, 1, 2, 3, 4])
 
 runExperiment :: Params -> IO ()
 runExperiment params = do
@@ -103,9 +103,11 @@ runExperiment params = do
   putStrLn $ "==== " ++ title ++ " ===="
   putStrLn "Running experiment..."
   let results = simulate params
-      filename = title ++ ".json"
+      outputDir = "../simulation-output/"
+      filename = outputDir ++ title ++ ".json"
   putStrLn "Done."
   putStrLn $ "Writing to file " ++ filename ++ "..."
+  createDirectoryIfMissing True outputDir
   writeFile filename $ encode results
   putStrLn "Done."
 
