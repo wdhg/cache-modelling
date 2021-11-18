@@ -25,18 +25,30 @@ newFIFOCache size = do
   initNextIndex <- newSTRef 0
   return $ FIFOCache initArray initNextIndex
 
+cachedIn :: Int -> FIFOCache s -> ST s Bool
+cachedIn x cache = do
+  xs <- getElems $ arrayST cache
+  return (x `elem` xs)
+
+evict :: FIFOCache s -> ST s ()
+evict cache = do
+  index <- readSTRef $ indexST cache
+  (lowerBound, upperBound) <- getBounds $ arrayST cache
+  if index < upperBound
+    then writeSTRef (indexST cache) (succ index)
+    else writeSTRef (indexST cache) lowerBound
+
+store :: Int -> FIFOCache s -> ST s ()
+store x cache = do
+  index <- readSTRef $ indexST cache
+  writeArray (arrayST cache) index x
+
 instance Cache FIFOCache s where
-  cachedIn x cache = do
-    xs <- getElems $ arrayST cache
-    return (x `elem` xs)
-
-  evict cache = do
-    index <- readSTRef $ indexST cache
-    (lowerBound, upperBound) <- getBounds $ arrayST cache
-    if index < upperBound
-      then writeSTRef (indexST cache) (succ index)
-      else writeSTRef (indexST cache) lowerBound
-
-  store x cache = do
-    index <- readSTRef $ indexST cache
-    writeArray (arrayST cache) index x
+  stash x cache = do
+    alreadyCached <- cachedIn x cache
+    if alreadyCached
+      then return True
+      else do
+        evict cache
+        store x cache
+        return False
