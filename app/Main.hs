@@ -15,7 +15,7 @@ makeExperiments = liftM5 Params
 runExperiment :: Params -> IO ()
 runExperiment params = do
   let results = simulate params
-      outputDir = "../simulation-output/"
+      outputDir = "output/"
       filename = outputDir ++ title ++ ".json"
       title =
         show (cacheType params)
